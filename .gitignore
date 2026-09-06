@@ -1,0 +1,11 @@
+node_modules/
+npm-debug.log*
+*.log
+.env
+.env.*
+
+# May contain API keys — keep out of git. See README for how to get it onto Render safely.
+dsh.config.json
+
+# dsh local state / profile / plugins
+.dsh/
