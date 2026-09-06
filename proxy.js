@@ -127,20 +127,44 @@ proxy.on('proxyRes', (proxyRes, req) => {
   }
 });
 
-proxy.on('error', (_err, _req, res) => {
-  if (res && typeof res.writeHead === 'function') {
-    const notReady = !launchToken;
-    res.writeHead(notReady ? 503 : 502, {
-      'content-type': 'text/plain',
-      'retry-after': notReady ? '5' : '2',
-    });
-    res.end(notReady
-      ? 'DeepSeek Harness is starting up (bootstrapping auth)...'
-      : 'DeepSeek Harness is starting up...');
-  }
+proxy.on('error', (_err, req, res) => {
+  if (!res || typeof res.writeHead !== 'function') return;
+  // A navigation that hit upstream while dsh is momentarily down: show the auto-retry page.
+  if (isIndexNav(req)) return bootPage(res, 'เซิร์ฟเวอร์กำลังรีสตาร์ต…');
+  res.writeHead(502, { 'content-type': 'text/plain', 'retry-after': '2' });
+  res.end('DeepSeek Harness is starting up...');
 });
 
-const server = http.createServer((req, res) => proxy.web(req, res));
+// Cold-start experience. On Render's free tier the container sleeps and dsh takes ~15s to
+// boot + print its token on every wake. If we answered that window with a plain 5xx text
+// page, a visitor who opens the URL cold lands on a dead-end that LOOKS broken ("เข้าไม่ได้").
+// Instead the index is held on a self-refreshing status page until the launch token is
+// captured, so the first successful navigation always finds auth ready.
+function bootPage(res, msg) {
+  const html = `<!doctype html><html lang="th"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="3"><title>DeepSeek Harness — กำลังเริ่มทำงาน</title>
+<style>body{font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b0d12;color:#e6e8ee;
+display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{text-align:center;max-width:420px;padding:32px}.spin{width:34px;height:34px;margin:0 auto 18px;
+border:3px solid #2a2f3a;border-top-color:#7aa2ff;border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}p{margin:.3em 0;color:#9aa3b2}code{color:#7aa2ff}</style></head>
+<body><div class="card"><div class="spin"></div><strong>DeepSeek Harness</strong>
+<p>${msg}</p><p>หน้านี้จะโหลดใหม่อัตโนมัติ…</p></div>
+<script>setTimeout(function(){location.reload()},3000)</script></body></html>`;
+  res.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-store',
+    'retry-after': '3',
+  });
+  res.end(html);
+}
+
+const server = http.createServer((req, res) => {
+  // Hold the first meaningful navigation until dsh is up and we have a token to inject.
+  if (!launchToken && isIndexNav(req)) return bootPage(res, 'กำลังเริ่มเซิร์ฟเวอร์ (bootstrapping auth)…');
+  proxy.web(req, res);
+});
 server.on('upgrade', (req, socket, head) => proxy.ws(req, socket, head));
 
 // Bind immediately so Render sees the port open even while dsh is still booting.
