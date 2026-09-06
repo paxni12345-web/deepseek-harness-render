@@ -25,6 +25,8 @@ services:
       # ------------------------------------------------------------------
       # Secrets (API keys, tokens) must NOT live in this committed file.
       # Add them in the Render Dashboard -> your service -> Environment ->
-      # "Advanced" -> Add Secret Environment Variable. Example (placeholder):
+      # "Advanced" -> Add Secret Environment Variable. REQUIRED:
+      #   DSH_PASS         = <passphrase for the /-gate edge login; without it
+      #                      the proxy is anonymously open -> remote code exec!>
       #   DEEPSEEK_API_KEY = <paste in dashboard only>
       # ------------------------------------------------------------------

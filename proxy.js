@@ -24,14 +24,32 @@
 //      performs the exchange for each first visit, relaying the Set-Cookie back to the
 //      browser. The raw token never reaches the client; the browser just ends up
 //      holding a valid cookie bound to the public authority.
+//
+// ACCESS CONTROL (added on top of the bootstrap, see gate.js):
+//   Because the bootstrap auto-mints a valid dsh session for ANY anonymous visitor, the
+//   raw URL would otherwise be an unauthenticated remote-code-execution endpoint (dsh
+//   ships bash/agent tools). So EVERY request — index navigations, /api, static assets
+//   and WebSocket upgrades — must first carry the `dshgate` cookie, which is issued by
+//   a single shared passphrase login at /-gate. Set DSH_PASS as a Render secret;
+//   with it unset the gate is disabled and a loud warning is printed at boot.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import HttpProxy from 'http-proxy';
+import { createGate } from './gate.js';
 
 const PORT = Number(process.env.PORT || 8080); // Render injects PORT (binds 0.0.0.0 here)
 const UPSTREAM = { host: '127.0.0.1', port: 3080 }; // dsh web only ever binds loopback
 const PATCH = process.env.DSH_CONFIG_PATCH || './dsh.config.json';
+
+const gate = createGate(process.env.DSH_PASS);
+if (!gate.enabled) {
+  console.error('[proxy] *** WARNING: DSH_PASS is not set — the passphrase gate is DISABLED.');
+  console.error('[proxy]     Anyone who finds this URL can drive a remote-code-execution agent.');
+  console.error('[proxy]     Add DSH_PASS as a secret in Render -> Environment. ***');
+} else {
+  console.error('[proxy] passphrase gate ON (login at /-gate; set DSH_PASS in Render secrets)');
+}
 
 // dsh defaults to 127.0.0.1:3080; --no-open keeps it headless; never pass --host 0.0.0.0.
 const args = ['--no-install', 'dsh', 'web', '--no-open'];
@@ -125,6 +143,17 @@ proxy.on('proxyRes', (proxyRes, req) => {
     const qs = injected.query ? `${injected.query}&${BOOTSTRAP}=1` : `${BOOTSTRAP}=1`;
     proxyRes.headers.location = `${injected.path}?${qs}`;
   }
+  // dsh issues its session cookie as SameSite=Strict, assuming a loopback UI. Behind
+  // Render's public host that breaks the exchange: the browser will not replay the just-
+  // minted cookie on the 303 follow-up navigation (nor reliably across a cold start), so
+  // /api comes back 401 and Settings shows "settings are unavailable in this browser".
+  // Lax keeps it on top-level navigations and same-site /api calls without opening the
+  // cookie to cross-site subresource requests, which is exactly what this deployment needs.
+  const cookies = proxyRes.headers['set-cookie'];
+  if (cookies) {
+    proxyRes.headers['set-cookie'] = (Array.isArray(cookies) ? cookies : [cookies])
+      .map((c) => c.replace(/;\s*SameSite=Strict/i, '; SameSite=Lax'));
+  }
 });
 
 proxy.on('error', (_err, req, res) => {
@@ -161,15 +190,25 @@ border:3px solid #2a2f3a;border-top-color:#7aa2ff;border-radius:50%;animation:s 
 }
 
 const server = http.createServer((req, res) => {
-  // Hold the first meaningful navigation until dsh is up and we have a token to inject.
-  if (!launchToken && isIndexNav(req)) return bootPage(res, 'กำลังเริ่มเซิร์ฟเวอร์ (bootstrapping auth)…');
-  proxy.web(req, res);
+  // Edge gate: without the dshgate cookie (issued at /-gate after the passphrase
+  // login) NOTHING reaches dsh — not the token bootstrap, not /api, not assets.
+  gate(req, res, () => {
+    // Hold the first meaningful navigation until dsh is up and we have a token to inject.
+    if (!launchToken && isIndexNav(req)) return bootPage(res, 'กำลังเริ่มเซิร์ฟเวอร์ (bootstrapping auth)…');
+    proxy.web(req, res);
+  });
 });
-server.on('upgrade', (req, socket, head) => proxy.ws(req, socket, head));
+server.on('upgrade', (req, socket, head) => {
+  if (!gate.isVerified(req)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+    return socket.destroy();
+  }
+  proxy.ws(req, socket, head);
+});
 
 // Bind immediately so Render sees the port open even while dsh is still booting.
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[proxy] 0.0.0.0:${PORT} -> ${UPSTREAM.host}:${UPSTREAM.port} (dsh web, auto-auth proxy)`);
+  console.log(`[proxy] 0.0.0.0:${PORT} -> ${UPSTREAM.host}:${UPSTREAM.port} (dsh web, auto-auth proxy, gate ${gate.enabled ? 'ON' : 'OFF'})`);
 });
 
 function shutdown(sig) {

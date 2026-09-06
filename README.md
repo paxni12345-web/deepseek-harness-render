@@ -99,12 +99,27 @@ npx @deepseek-ai/dsh web --dump-default-config > dsh.config.json   # inspect the
    Now every `git push` to `main` triggers the workflow → Render pulls the latest code and redeploys.
 6. **Open the service URL** in a browser to use the dsh Web UI.
 
+## Passphrase gate (REQUIRED in production)
+
+`proxy.js` auto-completes dsh's launch-token exchange for visitors, so **without further
+protection the public URL is an unauthenticated remote-code-execution surface** (dsh ships
+bash/agent tools). `gate.js` closes that at the edge: every request, API call and WebSocket
+upgrade must first carry a `dshgate` cookie, which is issued only after a single shared
+passphrase login at **`/-gate`** (HttpOnly, SameSite=Lax, 30 days, `Secure` behind Render's
+HTTPS). dsh's own auth is left fully intact — nothing in its `packages/web/src` is patched.
+
+Setup: Render → service → Environment → **Add Secret Environment Variable** → `DSH_PASS`
+= your passphrase. With `DSH_PASS` unset the gate is disabled and the proxy logs a loud
+warning at boot. For local testing: `DSH_PASS=devpass PORT=8080 node proxy.js`.
+A redeploy does not log browsers out (the cookie is derived from the passphrase, not from
+per-boot state). To revoke access, change the value of `DSH_PASS` and redeploy.
+
 ## Test locally first
 ```bash
 cd dsh-render
 npm install
-PORT=8080 node proxy.js          # in another terminal:
-curl -i http://localhost:8080/   # 200 = UI proxying; 502 "starting up" = dsh still booting
+DSH_PASS=devpass PORT=8080 node proxy.js   # in another terminal:
+curl -i http://localhost:8080/   # 401 login page until you POST the passphrase to /-gate
 ```
 
 ## Notes / caveats
