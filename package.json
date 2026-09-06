@@ -8,11 +8,12 @@
     "node": ">=22.15"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-settings-loopback.mjs",
     "start": "node proxy.js",
     "build": "node -e \"import('@deepseek-ai/dsh').then(()=>console.log('deps ok')).catch(e=>{console.error(e);process.exit(1)})\""
   },
   "dependencies": {
-    "@deepseek-ai/dsh": "^0.1.2-rc.1",
+    "@deepseek-ai/dsh": "0.1.2-rc.1",
     "http-proxy": "^1.18.1"
   }
 }
