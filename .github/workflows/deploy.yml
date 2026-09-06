@@ -1,0 +1,24 @@
+name: Deploy to Render (on push)
+
+# Trigger: every push to main. Add more branches if needed.
+on:
+  push:
+    branches: [main]
+
+# Manual button in the Actions tab, useful for first deploy or re-deploy:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        # -f  fail on HTTP errors, -s  silent, -S  still show errors
+        # The hook URL (a service-scoped, revocable secret) lives in GitHub Secrets,
+        # NOT the Render account API key. Render does the git pull + build itself.
+        run: |
+          echo "POSTing to Render deploy hook …"
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Deploy triggered."
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
