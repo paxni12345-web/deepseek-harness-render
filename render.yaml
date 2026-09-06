@@ -8,7 +8,7 @@ services:
     # inactivity* and has no 24/7 uptime — which contradicts the original "always-on"
     # goal. For truly persistent, use plan: starter (paid). See README.
     plan: free
-    region: oregon        # nearest to Thailand; change to oregon/ohio/frankfurt if you prefer
+    region: oregon           # Render FREE tier is US-only; singapore would reject 'free'
     branch: main             # the branch you push to on YOUR repo (upstream itself uses 'master')
     buildCommand: npm install
     startCommand: node proxy.js   # proxy binds 0.0.0.0:$PORT and forwards to dsh (see proxy.js)
@@ -16,8 +16,10 @@ services:
     # auto-deploy on every push (avoids double deploys / races).
     autoDeploy: false
     envVars:
+      # dsh 0.1.2-rc.1 needs Node >=22.15 (uses node:zlib createZstdDecompress,
+      # Promise.withResolvers, module.stripTypeScriptTypes). Node 20/22.14 CRASH the plugin tree.
       - key: NODE_VERSION
-        value: 20.18.0
+        value: 22.18.0
       - key: DSH_CONFIG_PATCH
         value: ./dsh.config.json
       # ------------------------------------------------------------------
