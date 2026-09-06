@@ -1,0 +1,28 @@
+# Render Blueprint — DeepSeek Harness (dsh) as a persistent Web Service
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: deepseek-harness
+    runtime: node
+    # FREE tier per your choice. ⚠️ CAVEAT: a free web service on Render *sleeps after
+    # inactivity* and has no 24/7 uptime — which contradicts the original "always-on"
+    # goal. For truly persistent, use plan: starter (paid). See README.
+    plan: free
+    region: singapore        # nearest to Thailand; change to oregon/ohio/frankfurt if you prefer
+    branch: main             # the branch you push to on YOUR repo (upstream itself uses 'master')
+    buildCommand: npm install
+    startCommand: node proxy.js   # proxy binds 0.0.0.0:$PORT and forwards to dsh (see proxy.js)
+    # We trigger deploys from GitHub Actions via the Deploy Hook, so Render must NOT
+    # auto-deploy on every push (avoids double deploys / races).
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: DSH_CONFIG_PATCH
+        value: ./dsh.config.json
+      # ------------------------------------------------------------------
+      # Secrets (API keys, tokens) must NOT live in this committed file.
+      # Add them in the Render Dashboard -> your service -> Environment ->
+      # "Advanced" -> Add Secret Environment Variable. Example (placeholder):
+      #   DEEPSEEK_API_KEY = <paste in dashboard only>
+      # ------------------------------------------------------------------
