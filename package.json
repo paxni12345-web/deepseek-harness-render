@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Render-ready wrapper: runs DeepSeek Harness (dsh) web UI non-interactively behind a 0.0.0.0 reverse proxy.",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.15"
   },
   "scripts": {
     "start": "node proxy.js",
