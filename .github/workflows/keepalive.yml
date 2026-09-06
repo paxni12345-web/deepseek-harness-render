@@ -1,0 +1,11 @@
+name: keep-alive
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # ping every 5 min so the free web service never sleeps
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: warm up dsh service
+        run: curl -sf --max-time 15 "https://deepseek-harness-puul.onrender.com/" || true
