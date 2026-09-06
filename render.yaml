@@ -8,7 +8,7 @@ services:
     # inactivity* and has no 24/7 uptime — which contradicts the original "always-on"
     # goal. For truly persistent, use plan: starter (paid). See README.
     plan: free
-    region: singapore        # nearest to Thailand; change to oregon/ohio/frankfurt if you prefer
+    region: oregon        # nearest to Thailand; change to oregon/ohio/frankfurt if you prefer
     branch: main             # the branch you push to on YOUR repo (upstream itself uses 'master')
     buildCommand: npm install
     startCommand: node proxy.js   # proxy binds 0.0.0.0:$PORT and forwards to dsh (see proxy.js)
